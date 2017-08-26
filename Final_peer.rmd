@@ -1,1 +1,1908 @@
+---
+title: "Peer Assessment II"
+output:
+  html_document: 
+    pandoc_args: [
+      "--number-sections",
+    ]
+---
 
+# Background
+
+As a statistical consultant working for a real estate investment firm, your task is to develop a model to predict the selling price of a given home in Ames, Iowa. Your employer hopes to use this information to help assess whether the asking price of a house is higher or lower than the true value of the house. If the home is undervalued, it may be a good investment for the firm.
+
+# Training Data and relevant packages
+
+In order to better assess the quality of the model you will produce, the data have been randomly divided into three separate pieces: a training data set, a testing data set, and a validation data set. For now we will load the training data set, the others will be loaded and used later.
+
+```{r load, message = FALSE}
+load("ames_train.Rdata")
+library(dplyr)
+ames_train$Overall.Qual<-as.factor(ames_train$Overall.Qual)
+ames_train$Overall.Cond<-as.factor(ames_train$Overall.Cond)
+
+am<-select(ames_train,price,area,Lot.Area,Year.Built,Overall.Qual,Land.Slope,Sale.Condition,Overall.Cond)
+am<-data.frame(am) 
+
+```
+```{r xxx, echo=FALSE}
+
+amSet1<-select(ames_train,price,Overall.Qual,Neighborhood,area,BsmtFin.SF.1, 
+Overall.Cond,Garage.Yr.Blt,Bldg.Type,Total.Bsmt.SF,Year.Built,
+Land.Slope,Sale.Condition,Central.Air,Lot.Shape,Kitchen.Qual,
+Garage.Cars,Fireplaces,Year.Remod.Add,MS.Zoning)
+
+amLSet<-ames_train
+amLSet<-data.frame(amLSet)
+amLSet$logarea<-log(amLSet$area+1)
+amLSet$logLot.Area<-log(amLSet$Lot.Area+1)
+amLSet$logX2nd.Flr.SF<-log(amLSet$X2nd.Flr.SF+1)
+amLSet$logBsmtFin.SF.1<-log(amLSet$BsmtFin.SF.1+1)
+
+
+amSet2<-select(amLSet,price,Overall.Qual,Neighborhood,logarea,       
+Overall.Cond,Year.Built,logLot.Area,Bsmt.Full.Bath,
+Garage.Type,Sale.Condition,logX2nd.Flr.SF,Bldg.Type,     
+Heating.QC,logBsmtFin.SF.1,Garage.Cars,MS.Zoning,   
+Kitchen.Qual,Heating,Central.Air,   
+Fireplaces)
+
+
+LSet<-select(ames_train,price,Overall.Qual,Lot.Area,
+Year.Built,Sale.Condition,area,MS.Zoning,Year.Remod.Add,Land.Slope,
+Exter.Qual,Lot.Shape,Land.Contour,Lot.Config,Street,
+Bsmt.Qual,Bsmt.Cond,Bsmt.Exposure,BsmtFin.Type.1,Bldg.Type,
+BsmtFin.SF.1,BsmtFin.Type.2,BsmtFin.SF.2,Bsmt.Unf.SF,
+Total.Bsmt.SF,Heating.QC,Central.Air,House.Style,
+Electrical,X1st.Flr.SF,X2nd.Flr.SF,
+Bsmt.Full.Bath,Bsmt.Half.Bath,Full.Bath,Half.Bath,
+Bedroom.AbvGr,Kitchen.AbvGr,TotRms.AbvGrd,
+Functional,Fireplaces,
+Garage.Yr.Blt,Garage.Finish,Garage.Cars,Garage.Area,
+Paved.Drive,Wood.Deck.SF,
+Open.Porch.SF,Enclosed.Porch,X3Ssn.Porch,Screen.Porch,
+Fence,Misc.Val,Mo.Sold,Yr.Sold,Sale.Type)
+
+LSet<-data.frame(LSet)
+LSet$logarea<-log(LSet$area+1)
+LSet$logLot.Area<-log(LSet$Lot.Area+1)
+LSet$logGarage.Area<-log(LSet$Garage.Area+1)
+LSet$logX2nd.Flr.SF<-log(LSet$X2nd.Flr.SF+1)
+LSet$logBsmtFin.SF.1<-log(LSet$BsmtFin.SF.1+1)
+LSet$logBsmtFin.SF.2<-log(LSet$BsmtFin.SF.2+1)
+LSet$logBsmt.Unf.SF<-log(LSet$Bsmt.Unf.SF+1)
+LSet$logTotal.Bsmt.SF<-log(LSet$Total.Bsmt.SF+1)
+LSet$logWood.Deck.SF<-log(LSet$Wood.Deck.SF+1)
+LSet$logOpen.Porch.SF<-log(LSet$Open.Porch.SF+1)
+LSet$logX1st.Flr.SF<-log(LSet$X1st.Flr.SF+1)
+
+ LSet<-LSet[-c(3,6,20,22,23,24,29,30,43,45,46)]
+
+
+amSet3<-select(LSet,1,2,44,3,45,48,4,19,5,6,31,54,16,39,30,34,18,29,14,28,13)
+
+
+
+
+
+```
+
+Use the code block below to load any necessary packages
+
+```{r packages, message = FALSE}
+library(statsr)
+library(dplyr)
+library(BAS)
+
+library(MASS)
+library(ggplot2)
+library(devtools)
+
+getwd()
+```
+
+## Part 1 - Exploratory Data Analysis (EDA)
+
+When you first get your data, it's very tempting to immediately begin fitting models and assessing how they perform.  However, before you begin modeling, it's absolutely essential to explore the structure of the data and the relationships between the variables in the data set.
+
+Do a detailed EDA of the ames_train data set, to learn about the structure of the data and the relationships between the variables in the data set (refer to Introduction to Probability and Data, Week 2, for a reminder about EDA if needed). Your EDA should involve creating and reviewing many plots/graphs and considering the patterns and relationships you see. 
+
+After you have explored completely, submit the three graphs/plots that you found most informative during your EDA process, and briefly explain what you learned from each (why you found each informative).
+
+* * *
+
+###  Labeled Histogram and Data Description
+
+The  data was analyized and the following statistics were determined :
+
+* Least expensive house is $12,789 (9.5 log units) and is the 428th row of the data table
+* Most expensive house is $615,000 (13.3 log units) and is the 66th row of the data table
+* There are more expensive houses and fewer cheaper houses (left skewed)
+* The distribution is unimodal with a median price of $159467 (12.0 log units) indicated by the red line
+* The mean house price is $181190 (12.1 log units) indicated by the purple line
+* The largest number of houses are between $100,000 - $200,000 (11.7-12.2 log units) price range
+
+
+The histogram, In Fig. I,  depicts a disribution of the Ames Iowa houses by natural log of the price in US Dollars.  There are 30 bins, each increasingly logarithymically, indicating the natural log of the price for each interval.  The total span of the histogram is roughly $700,000 or(13.5 log units).  The total count for each bin is located near the top of the bin column.
+
+The blue shaded region for each bar in the histogram indicate the house was purchase under normal sale conditions.  The salmon colored regions indicate other than normal sale conditions.  The preponderance of the other than normal sale conditions occur for the higher priced houses.
+
+
+```{r creategraphs,echo=FALSE}
+
+
+ama<-ames_train
+
+p<-ggplot(aes(x = log(price) ) , data = ama) + 
+geom_histogram(aes(fill=(Sale.Condition=='Normal') )) +
+stat_bin( geom="text", aes(label=..count..) ,vjust = 0,hjust=0) +	
+xlab('Natural log of Price (in US Dollars)')+
+geom_vline(data=ama,xintercept=median(log(ama$price)), color="red")+
+geom_vline(data=ama,xintercept=mean(log(ama$price)), color="blue")+
+ ggtitle("Fig I. Natural Log of Price Distribution of Real Estate for Ames Iowa")
+
+suppressMessages(plot(p))
+
+#plot(p)
+par(mfrow=c(1,1))
+
+am<-ames_train
+am<-as.data.frame(am)
+hilo<-matrix(0,nrow=4,ncol=5,byrow=TRUE,dimnames=list(c('Least Expensive','Most Expensive','Median','Mean'),c('Price','LogPrice','Index','Count','Neighborhood')))
+hilo<-data.frame(hilo)
+hilo[1,'Price']<- min(am$price)
+hilo[2,'Price']<- max(am$price)
+hilo[3,'Price']<- median(am$price)
+hilo[4,'Price']<- mean(am$price)
+hilo[2,'LogPrice']<- round(log(max(am$price)),1)
+hilo[1,'LogPrice']<- round(log(min(am$price)),1)
+hilo[3,'LogPrice']<- round(log(median(am$price)),1)
+hilo[4,'LogPrice']<- round(log(mean(am$price)),1)
+hilo[1,'Count']<- nrow(am[am$price==min(am$price),])
+hilo[2,'Count']<- nrow(am[am$price==max(am$price),])
+hilo[1,'Index']<- which(am$price==min(am$price))
+hilo[2,'Index']<- which(am$price==max(am$price))
+hilo[1,'Neighborhood']<- as.character(am[which(am$price==min(am$price)),'Neighborhood'])
+hilo[2,'Neighborhood']<- as.character(am[which(am$price==max(am$price)),'Neighborhood'])
+
+# TABLE I
+print('Table I:  Highest, Lowest, Median and Mean Priced Houses in Ames Training Data');hilo
+#PLOT  
+
+# CONSTRUCT A DATA FRAME CONTAINING A ROW FOR EACH NEIGHBORHOOD IN THE AMES DARA
+# THE COLUMNS CONTAIN STATISTICS FOR EACH NEIGHBORHOOD (MEAN, SD, MEDIAN, MAX ,MIN)
+neighstat <- matrix(0, nrow = length(unique(am$Neighborhood)), ncol = 6, byrow = TRUE,
+               dimnames = list(unique(am$Neighborhood),
+                               c("Mean", "SD","Median","Max","Min","IQR")))
+neighstat<-data.frame(neighstat)
+#BUILD THE DATA FRAME
+j=1
+for(i in rownames(neighstat)){
+      neighstat[j,1]<-mean(filter(am,Neighborhood==i)$price)
+      neighstat[j,2]<-sd(filter(am,Neighborhood==i)$price)
+      neighstat[j,3]<-median(filter(am,Neighborhood==i)$price)
+      neighstat[j,4]<-max(filter(am,Neighborhood==i)$price)
+      neighstat[j,5]<-min(filter(am,Neighborhood==i)$price)
+	neighstat[j,6]<-IQR(filter(am,Neighborhood==i)$price)
+
+      j=j+1
+}
+# REVERSE ORDER THE DATA FRAMES BY MEDIAN, MEAN AND SD INTO SEPARATE DATA FRAMES
+medianRN<-rownames(neighstat[order(-neighstat$Median),])
+meanRN<-rownames(neighstat[order(-neighstat$Mean),])
+sdRN<-rownames(neighstat[order(-neighstat$SD),])
+iqrRN<-rownames(neighstat[order(-neighstat$IQR),])
+
+RN<-rbind(medianRN,meanRN,sdRN,iqrRN)
+#RN
+medianPlot<-data.frame()
+meanPlot<-data.frame()
+sdPlot<-data.frame()
+iqrPlot<-data.frame()
+
+medianPlot<-ggplot(medianPlot)
+meanPlot<-ggplot(meanPlot)
+sdPlot<-ggplot(sdPlot)
+iqrPlot<-ggplot(iqrPlot)
+
+medianTitle<-"Fig, II  Ames Real Estate, by Neighborhood, in Order of Highest Median Price"
+meanTitle<-"Fig. III  Ames Real Estate, by Neighborhood, in Order of Highest Average Price"
+sdTitle<-"Fig. II  Ames Real Estate, by Neighborhood, in Order of Most Heterogenous Prices"
+iqrTitle<-"Fig. V  Ames Real Estate, by Neighborhood, in Order Highest Price IQR"
+
+Title<-rbind(medianTitle,meanTitle,sdTitle,iqrTitle)
+#Title
+
+for(k in 1:nrow(RN)){
+
+	j=1
+	for(i in RN[k,]){
+ 		x<-am$Neighborhood==i
+ 		am[grep("TRUE",x),'order']<-j
+		ifelse(j<10,am[grep("TRUE",x),'NeighborhoodLabel']<-paste0("0",j," ",i),am[grep("TRUE",x),'NeighborhoodLabel']<-paste0(j," ",i))
+		j=j+1
+	}
+
+	x<-am %>% group_by( order) %>%
+	ggplot( aes(x=as.factor(order), y=price/1000,fill = NeighborhoodLabel, col=I("black"))) + geom_boxplot() +
+    	stat_summary(fun.y=mean, geom="point", shape=4, size=5,color='black')+		
+	stat_summary(fun.y=min, geom="point", shape=25, size=2)  +
+	  stat_summary(fun.y=sd, geom="point", shape=1, size=2,color='red')  +
+	  stat_summary(fun.y=max, geom="point", shape=24, size=2)  +
+	  
+	  
+   	coord_flip()+
+	xlab("Neigborhood")+
+	scale_y_discrete(name ="Price (in $1000)"  ,
+                limits=c(0,100,200,300,400,500,600)) +
+	ggtitle(Title[k,1])
+
+	if(k==1){medianPlot<-x}
+	if(k==2){meanPlot<-x}
+	if(k==3){sdPlot<-x}
+	if(k==4){iqrPlot<-x}
+
+
+}
+
+options(warn=-1)
+plot(sdPlot)
+
+```
+
+
+### Neighborhood Statistical Summary
+
+The statistical summary is provided using individual boxplots for each Neighborhood in the Ames training data with respect to price.  In order to better understand the statistical summary, a detailed explanation of Figure II is provided in the following section.
+
+The boxplots are plotted sideways to reveal the information in a form much like a distribution.  Each boxplot has units of price dollars (in thousands) with the following characteristics:
+
+* Box width corresponds to the price Inter Quartile Range or IQR 
+
+* Box center bar is the median price value
+
+* Left and right box whisker(sometimes outliers) corresponds to the min(inverted triangle) and max(upright triangle) price values, correspondingly,
+
+* X in the box is the price mean
+
+* The red o corresponds to the price standard deviation
+
+* The NeighborhoodLabel maps the neighborhood name to its numerical value on the boxplot.
+
+A red o represents the price standard deviation for each boxplot.  By examination it is easy for you to see that the right-handedness of the red o decreases as you move your view upward from boxplot 1.  The Neighboorhood associated with boxplot 1 is StoneBr and it has a maximum house price of $`r  as.integer(neighstat['StoneBr','Max'])`, a minimum price of $`r  as.integer(neighstat['StoneBr','Min'])` and it has a price standard deviation of $`r  as.integer(max(neighstat$SD))`.  Correspondingly, the Neighborhood associated with boxplot 27 is Blueste and it has a maximum house price of $`r  as.integer(neighstat['Blueste','Max'])`, a minimum price of $`r  as.integer(neighstat['Blueste','Min'])` it has a  price standard deviation of $`r  as.integer(min(neighstat$SD))`.  Therfore the price standard deviation range or heterogenocity is from $10,000 to $123,000 when grouped by Neighborhood.
+
+
+```{r graph2, echo=FALSE}
+
+
+
+par(mfrow=c(1,1))
+
+ami<-order(am$price)
+oam<-am[ami,]
+indx<-1:500
+subS<-oam[indx,]
+subS<-data.frame(subS)
+subS2<-oam[-indx,]
+subS2<-data.frame(subS2)
+par(mfrow=c(1,1))
+n.Overall.Qual = length(levels(subS2$Overall.Qual))
+par(mar=c(5,4,4,10))
+plot(log(price) ~ I(area), 
+     data=subS, col=Overall.Qual,
+     pch=as.numeric(Overall.Qual)+15, main="Fig.III  500 Lowest Sale Prices showing Overall Quality",
+     xlab=" Living Space (in SF)",ylab="Natural Log of Price (in US Dollars)")
+legend(x=,"right", legend=levels(ames_train$Overall.Qual),
+       col=1:n.Overall.Qual, pch=15+(1:n.Overall.Qual),
+       bty="n", xpd=TRUE, inset=c(-.5,0))
+
+# n.Overall.Qual = length(levels(subS2$Overall.Qual))
+# par(mar=c(5,4,4,10))
+# plot(log(price) ~ I(area), 
+#      data=subS2, col=Overall.Qual,
+#      pch=as.numeric(Overall.Qual)+15, main="Fig.III  500 Lowest Sale Prices showing Overall Quality",
+#      xlab=" Living Space (in SF)",ylab="Natural Log of Price (in US Dollars)")
+# legend(x=,"right", legend=levels(ames_train$Overall.Qual),
+#        col=1:n.Overall.Qual, pch=15+(1:n.Overall.Qual),
+#        bty="n", xpd=TRUE, inset=c(-.5,0))
+
+options(warn=0)
+par(mfrow=c(1,1))
+```
+
+### 500 Lowest Priced Houses Scatter Plot
+
+Figure III is a scatter plot of 500 lowest prices in the ames_train data set.  The ordinate is the natural log of the selling price and the abscissa is the living space.  The points are characterized by each house's overall Quality and fro this reason it is needed.  I choose to use this plot since the under priced holmes may be more likely to be in the lower half.
+
+
+* * *
+
+## Part 2 - Development and assessment of an initial model, following a semi-guided process of analysis
+
+
+### Section 2.1 An Initial Model
+In building a model, it is often useful to start by creating a simple, intuitive initial model based on the results of the exploratory data analysis. (Note: The goal at this stage is **not** to identify the "best" possible model but rather to choose a reasonable and understandable starting point. Later you will expand and revise this model to create your final model.
+
+Based on your EDA, select *at most* 10 predictor variables from “ames_train” and create a linear model for `price` (or a transformed version of price) using those variables. Provide the *R code* and the *summary output table* for your model, a *brief justification* for the variables you have chosen, and a *brief discussion* of the model results in context (focused on the variables that appear to be important predictors and how they relate to sales price).
+
+#### Building the Initial Model
+
+Using the results from the previous tests and exercises, I chose to predict log(price) using:
+log(area),log(Lot.Area),Year.Built,Overall.Qual,Land.Slope,Sale.Condition and Overall.Cond as explanatory variables.
+The Summary Table is provided below.
+
+* * *
+
+```{r fit_model, cache=TRUE}
+
+
+lmt<-lm(log(price)~log(area)+log(Lot.Area)+Year.Built+Overall.Qual+Land.Slope+Sale.Condition+Overall.Cond,data=am)  
+summary(lmt)
+
+
+```
+#### Model Variable Explanation/Discussion
+
+* log(area) - Size of house important to price prediction - Coefficient Estimate = ($`r  summary(lmt)$coefficients[2,1]`) - log chosen to make square footage less right skewed
+* log(Lot.Area) - Size of lot important to price prediction - - Coefficient Estimate = ($`r  summary(lmt)$coefficients[3,1]`) log chosen to make square footage less right skewed
+* Year.Built - Coefficient Estimate = ($`r  summary(lmt)$coefficients[4,1]`) House age can be important for many reasons, some like older house and some like newer
+* Overall.Qual -  - Coefficient Estimate = ($`r  summary(lmt)$coefficients[5:13,1]`) - price is directly dependent on this which can lead to undervalue
+* Land.Slope  - Coefficient Estimate = ($`r  summary(lmt)$coefficients[14:15,1]`)- Some like flat lots, other like a hill for water drainage
+* Sale.Condition  - Coefficient Estimate = ($`r  summary(lmt)$coefficients[16:20,1]`)- Emergency situations can reduce selling price
+* Overall.Cond - - Coefficient Estimate = ($`r  summary(lmt)$coefficients[21:28,1]`) House Condition can be a major cause of undervalued price
+
+
+The Adjusted R Squared value is $`r  summary(lmt)$adj.r.square` , which is a good starting point.
+
+
+* * *
+
+### Section 2.2 Model Selection
+
+Now either using `BAS` another stepwise selection procedure choose the "best" model you can, using your initial model as your starting point. Try at least two different model selection methods and compare their results. Do they both arrive at the same model or do they disagree? What do you think this means?
+
+* * *
+
+#### Using Bayesian Adaptive Sampling (BAS) and Akaike Information Criterion (AIC)
+
+The Bayesian adaptive sampling algorithm (BAS), samples models without replacement from the space of models. For problems that permit enumeration of all models, BAS is guaranteed to enumerate the model space in 2p iterations where p is the number of potential variables under consideration. For larger problems where sampling is required, we provide conditions under which BAS provides perfect samples without replacement. When the sampling probabilities in the algorithm are the marginal variable inclusion probabilities, BAS may be viewed as sampling models "near" the median probability model of Barbieri and Berger. As marginal inclusion probabilities are not known in advance, we discuss several strategies to estimate adaptively the marginal inclusion probabilities within BAS. We illustrate the performance of the algorithm using simulated and real data and show that BAS can outperform Markov chain Monte Carlo methods.[3]
+
+The BAS model is constructed and analysed.  The corrections are implemented and applied to a second model, lmtA.
+The AIC model is applied to bothe models, lmt and lmtA.
+
+```{r model_select,cache=TRUE}
+
+
+
+model.bas <- bas.lm(log(price) ~log(area)+log(Lot.Area)+Bedroom.AbvGr+Overall.Qual+Land.Slope+ Sale.Condition+Overall.Cond, data = am, prior = "ZS-null", modelprior=uniform(),initprobs="eplogp")
+
+plot(model.bas, ask=F)
+```
+
+#### BAS  Graphical Summaries (4 Plots Shown Above)
+
+* $\bf{Residuals}$ $\bf{and}$ $\bf{Fitted}$ $\bf{Values}$ - As rendered under Bayesian Model Averaging. Ideally, of our model assumptions hold, we will not see outliers or non-constant variance.[1]
+
+* $\bf{Model}$ $\bf{Probabilities}$ - the cumulative probability of the models in the order that they are sampled. This plot indicates that the cumulative probability is leveling off as each additional model adds only a small increment to the cumulative probability, which earlier, there are larger jumps corresponding to sampling high probability models.[1]
+
+* $\bf{Model}$ $\bf{Complexity}$ - the dimension of each model (the number of regression coefficients including the intercept) versus the log of the marginal likelihood of the model.[1]
+
+* $\bf{Inclusion}$ $\bf{Probabilities}$ - the marginal posterior inclusion probabilities (pip) for each of the covariates, with marginal pips greater than 0.5 shown in red. The variables with pip > 0.5 correspond to what is known as the median probability model. Variables with high inclusion probabilities are generally important for explaining the data or prediction, but marginal inclusion probabilities may be small if there predictors are correlated, similar to how p-values may be large in the presence of mullticollinearity.[1]
+
+```{r ZZ ,cache=TRUE}
+
+
+model.bas
+
+```
+
+####  Marginal Posterior Inclusion Probabilities (Above)
+
+```{r zza}
+
+options(width = 80)
+summary(model.bas)
+
+```
+
+####  BAS Top 5 Models (in terms of posterior probability) 
+
+Listed above with the zero-one indicators for variable inclusion. The other columns in the summary are the Bayes factor of each model to the highest probability model (hence its Bayes factor is 1), the posterior probabilities of the models, the ordinary $R^2$ of the models, the dimension of the models (number of coefficients including the intercept) and the log marginal likelihood under the selected prior distribution.[1]
+
+```{r zzb}
+
+
+image(model.bas, rotate=F)
+```
+
+
+#### Model Space Visualisation (Above) 
+
+This image has rows that correspond to each of the variables and intercept, with labels for the variables on the y-axis. The x-axis corresponds to the possible models. These are sorted by their posterior probability from best at the left to worst at the right with the rank on the top x-axis.
+
+Each column represents one of the 20 models. The variables that are excluded in a model are shown in black for each column, while the variables that are included are colored, with the color related to the log posterior probability. The color of each column is proportional to the log of the posterior probabilities (the lower x-axis) of that model.
+
+Models that are the same color have similar log posterior probabilities which allows us to view models that are clustered together that have marginal likelihoods where the differences are not "worth a bare mention".
+This plot indicates that the police expenditure in the two years do not enter the model together, and is an indication of the high correlation between the two variables.[1]
+
+```{r zzc}
+
+
+am1<- ames_train %>% filter(Sale.Condition == "Normal"| Sale.Condition == "Partial")
+am1<- am1 %>% filter(Overall.Qual!=2| Overall.Qual != 3)
+am1<- am1 %>% filter(Overall.Cond!=2)
+am1<- am1 %>% filter(Land.Slope!='Sev')
+
+lmtA<-lm(log(price)~log(area)+log(Lot.Area)+Year.Built+Overall.Qual+Land.Slope+Sale.Condition+Overall.Cond,data=am1) 
+
+```
+
+#### Base Model with BAS Adjustments (lmtA Above)
+
+The base model, lmt, has been adjusted for BAS Model 1 conditions.  This will yield a more effective predictive model.
+
+
+```{r}
+
+
+model.AIC <- stepAIC(lmt, k = 2)
+
+```
+
+#### AIC Model using Base Explanatory variables
+
+The Akaike information criterion (AIC) is a measure of the relative quality of statistical models for a given set of data. Given a collection of models for the data, AIC estimates the quality of each model, relative to each of the other models. Hence, AIC provides a means for model selection.
+AIC is founded on information theory: it offers a relative estimate of the information lost when a given model is used to represent the process that generates the data. In doing so, it deals with the trade-off between the goodness of fit of the model and the complexity of the model.
+AIC does not provide a test of a model in the sense of testing a null hypothesis, so it can tell nothing about the quality of the model in an absolute sense. If all the candidate models fit poorly, AIC will not give any warning of that.[2]
+The Bayesian information criterion (BIC) or Schwarz criterion (also SBC, SBIC) is a criterion for model selection among a finite set tof models; the model with the lowest BIC is preferred. It is based, in part, on the likelihood function and it is closely related to the Akaike information criterion (AIC).[2]
+
+```{r}
+
+model.AICA <- stepAIC(lmtA, k = 2)
+
+```
+
+#### AIC Model using BAS Adjusted Explanatory variables
+ 
+* * *
+
+### Section 2.3 Initial Model Residuals
+One way to assess the performance of a model is to examine the model's residuals. In the space below, create a residual plot for your preferred model from above and use it to assess whether your model appears to fit the data well. Comment on any interesting structure in the residual plot (trend, outliers, etc.) and briefly discuss potential implications it may have for your model and inference / prediction you might produce.
+
+* * *
+#### Residuals and Errors
+
+In statistics and optimization, errors and residuals are two closely related and easily confused measures of the deviation of an observed value of an element of a statistical sample from its "theoretical value". The error (or disturbance) of an observed value is the deviation of the observed value from the (unobservable) true value of a quantity of interest (for example, a population mean), and the residual of an observed value is the difference between the observed value and the estimated value of the quantity of interest (for example, a sample mean). The distinction is most important in regression analysis, where the concepts are sometimes called the regression errors and regression residuals and where they lead to the concept of studentized residuals.[4]
+
+```{r model_resid, cache=TRUE}
+
+plot(lmt$residuals, main="Base Model Residuals vs Collective Index")
+plot(lmtA$residuals, main="Base Model with BAS Adjustments Residuals vs Collective Index")
+plot(model.AIC$residuals, main='Model AIC Residuals vs Collection Index')
+plot(model.AICA$residuals, main='Model AIC with BAS adjustments Residuals vs Collection Index')
+
+```
+
+#### Analysis of the Residual Plots Above
+
+The difference between the observed value of the dependent variable (y) and the predicted value (y) is called the residual (e). Each data point has one residual.
+
+Residual = Observed value - Predicted value ($e = y - y$)
+
+Both the sum and the mean of the residuals are equal to zero. That is, $\sum_{i=1}^{n} e_i$ = 0 and e = 0.
+
+A residual plot is a graph that shows the residuals on the vertical axis and the independent variable on the horizontal axis. If the points in a residual plot are randomly dispersed around the horizontal axis, a linear regression model is appropriate for the data; otherwise, a non-linear model is more appropriate.[5]
+
+The points of interest for the residuals is that all four plots appear to be uniformly distributed and the number of $\bf {outliers}$ is substantially reduced by using the BAS for both the Base and the AIC models.
+
+* * *
+
+### Section 2.4 Initial Model RMSE
+
+You can calculate it directly based on the model output. Be specific about the units of your RMSE (depending on whether you transformed your response variable). The value you report will be more meaningful if it is in the original units (dollars).
+
+* * *
+
+In statistics, the mean squared error (MSE) or mean squared deviation (MSD) of an estimator (of a procedure for estimating an unobserved quantity) measures the average of the squares of the errors or deviations-that is, the difference between the estimator and what is estimated. MSE is a risk function, corresponding to the expected value of the squared error loss or quadratic loss. The difference occurs because of randomness or because the estimator doesn't account for information that could produce a more accurate estimate.[7]
+
+The MSE is a measure of the quality of an estimator-it is always non-negative, and values closer to zero are better.
+The MSE is the second moment (about the origin) of the error, and thus incorporates both the variance of the estimator and its bias. For an unbiased estimator, the MSE is the variance of the estimator. Like the variance, MSE has the same units of measurement as the square of the quantity being estimated. In an analogy to standard deviation, taking the square root of MSE yields the root-mean-square error or root-mean-square deviation (RMSE or RMSD), which has the same units as the quantity being estimated; for an unbiased estimator, the RMSE is the square root of the variance, known as the standard deviation.[6]
+
+
+```{r model_rmse,cache=TRUE,echo=FALSE}
+
+predict.fullAlone <- exp(predict(lmt))
+predict.fullAloneA <- exp(predict(lmtA))
+predict.AICAlone<-exp(predict(model.AIC))
+predict.AICAloneA<-exp(predict(model.AICA))
+
+# Extract Residuals
+resid.fullAlone <- ames_train$price - predict.fullAlone
+resid.AICAlone<-ames_train$price - predict.AICAlone
+resid.fullAloneA <- am1$price - predict.fullAloneA
+resid.AICAloneA <- am1$price - predict.AICAloneA
+
+# Calculate RMSE
+rmse.fullAlone <- sqrt(mean(resid.fullAlone^2))
+rmse.fullAloneA <- sqrt(mean(resid.fullAloneA^2))
+rmse.AICAlone<-sqrt(mean(resid.AICAlone^2))
+rmse.AICAloneA<-sqrt(mean(resid.AICAloneA^2))
+sprintf("%8.0f US Dollars",rmse.fullAlone)
+
+```
+
+#### RMSE Value for Base Training Model (Above)
+
+```{r mrA}
+
+sprintf("%8.0f US Dollars",rmse.fullAloneA)
+
+
+```
+
+#### RMSE Value for Base Training Model with BAS Adjustment  (Above)
+```{r mrB}
+
+sprintf("%8.0f US Dollars",rmse.AICAlone)
+
+```
+
+#### RMSE Value for AIC Training Model  (Above)
+```{r mrC}
+
+sprintf("%8.0f US Dollars",rmse.AICAloneA)
+
+```
+
+#### RMSE Value for AIC Training Model with BAS Adjustment (Above)
+
+#### Analysis of the RMSE Above
+
+It is obvios that applying the BAS adjustments to both the Base and AIC model lowers the RMSE (much lower than the 100,000 dollar limit).  Since there is nod difference between RMSE results for the Base and AIC model, the AIC model will be no longer deployed. 
+
+* * *
+
+### Section 2.5 Overfitting 
+
+The process of building a model generally involves starting with an initial model (as you have done above), identifying its shortcomings, and adapting the model accordingly. This process may be repeated several times until the model fits the data reasonably well. However, the model may do well on training data but perform poorly out-of-sample (meaning, on a dataset other than the original training data) because the model is overly-tuned to specifically fit the training data. This is called “overfitting.” To determine whether overfitting is occurring on a model, compare the performance of a model on both in-sample and out-of-sample data sets. To look at performance of your initial model on out-of-sample data, you will use the data set `ames_test`.
+
+```{r loadtest, message = FALSE}
+
+library(dplyr)
+load("ames_test.Rdata")
+ames_test$Overall.Qual<-as.factor(ames_test$Overall.Qual)
+ames_test$Overall.Cond<-as.factor(ames_test$Overall.Cond)
+at<-ames_test
+
+at1<- at %>% filter(Sale.Condition == "Normal"| Sale.Condition == "Partial")
+at1<- at1 %>% filter(Overall.Qual!=2| Overall.Qual != 3)
+at1<- at1 %>% filter(Overall.Cond!=2)
+at1<- at1 %>% filter(Land.Slope!='Sev')
+
+
+############## TO BE USED IN LATER SECTIONS ############################
+
+tLSet<-dplyr::select(ames_test,price,Overall.Qual,Lot.Area,
+Year.Built,Sale.Condition,area,MS.Zoning,Year.Remod.Add,Land.Slope,
+Exter.Qual,Lot.Shape,Land.Contour,Lot.Config,Street,
+Bsmt.Qual,Bsmt.Cond,Bsmt.Exposure,BsmtFin.Type.1,Bldg.Type,
+BsmtFin.SF.1,BsmtFin.Type.2,BsmtFin.SF.2,Bsmt.Unf.SF,
+Total.Bsmt.SF,Heating.QC,Central.Air,House.Style,
+Electrical,X1st.Flr.SF,X2nd.Flr.SF,
+Bsmt.Full.Bath,Bsmt.Half.Bath,Full.Bath,Half.Bath,
+Bedroom.AbvGr,Kitchen.AbvGr,TotRms.AbvGrd,
+Functional,Fireplaces,
+Garage.Yr.Blt,Garage.Finish,Garage.Cars,Garage.Area,
+Paved.Drive,Wood.Deck.SF,
+Open.Porch.SF,Enclosed.Porch,X3Ssn.Porch,Screen.Porch,
+Fence,Misc.Val,Mo.Sold,Yr.Sold,Sale.Type)
+
+tLSet<-data.frame(tLSet)
+tLSet$logarea<-log(tLSet$area+1)
+tLSet$logLot.Area<-log(tLSet$Lot.Area+1)
+tLSet$logGarage.Area<-log(tLSet$Garage.Area+1)
+tLSet$logX2nd.Flr.SF<-log(tLSet$X2nd.Flr.SF+1)
+tLSet$logBsmtFin.SF.1<-log(tLSet$BsmtFin.SF.1+1)
+tLSet$logBsmtFin.SF.2<-log(tLSet$BsmtFin.SF.2+1)
+tLSet$logBsmt.Unf.SF<-log(tLSet$Bsmt.Unf.SF+1)
+tLSet$logTotal.Bsmt.SF<-log(tLSet$Total.Bsmt.SF+1)
+tLSet$logWood.Deck.SF<-log(tLSet$Wood.Deck.SF+1)
+tLSet$logOpen.Porch.SF<-log(tLSet$Open.Porch.SF+1)
+tLSet$logX1st.Flr.SF<-log(tLSet$X1st.Flr.SF+1)
+
+ tLSet<-tLSet[-c(3,6,20,22,23,24,29,30,43,45,46)]
+
+
+atLSet<-dplyr::select(tLSet,1,2,44,3,45,48,4,19,5,6,31,54,16,39,30,34,18,29,14,28,13)
+
+atSet1<-dplyr::select(ames_test,price,Overall.Qual,Neighborhood,area,BsmtFin.SF.1, 
+Overall.Cond,Garage.Yr.Blt,Bldg.Type,Total.Bsmt.SF,Year.Built,
+Land.Slope,Sale.Condition,Central.Air,Lot.Shape,Kitchen.Qual,
+Garage.Cars,Fireplaces,Year.Remod.Add,MS.Zoning)
+
+amLSet<-ames_train
+amLSet<-data.frame(amLSet)
+amLSet$logarea<-log(amLSet$area+1)
+amLSet$logLot.Area<-log(amLSet$Lot.Area+1)
+amLSet$logX2nd.Flr.SF<-log(amLSet$X2nd.Flr.SF+1)
+amLSet$logBsmtFin.SF.1<-log(amLSet$BsmtFin.SF.1+1)
+ 
+
+
+# Extract Predictions
+predict.full <- exp(predict(lmt, ames_test))
+predict.fullA <- exp(predict(lmtA, at1))
+
+# Extract Residuals
+resid.full <- ames_test$price - predict.full
+resid.fullA <- at1$price - predict.fullA
+
+# Calculate RMSE
+rmse.full <- sqrt(mean(resid.full^2))
+rmse.fullA <- sqrt(mean(resid.fullA^2))
+plot(resid.full, main="Base Model Residuals for Test Data")
+plot(resid.fullA, main="Base Model Residuals w/BAS for Test Data")
+
+```
+
+#### Test Data Residuals (Above)
+
+```{r ltA}
+
+
+print('RMSE Value for Base Training Model on Test Data');sprintf("%8.0f US Dollars",rmse.full)
+print('RMSE Value for Base Training Model w/BAS Adjustment on Test Data');sprintf("%8.0f US Dollars",rmse.fullA)
+
+```
+
+
+#### Test Data RMSE (Above)
+
+
+
+Use your model from above to generate predictions for the housing prices in the test data set.  Are the predictions significantly more accurate (compared to the actual sales prices) for the training data than the test data?  Why or why not? Briefly explain how you determined that (what steps or processes did you use)?
+
+* * *
+
+NOTE: Write your written response to section 2.5 here. Delete this note before you submit your work.
+
+```{r initmodel_test}
+
+plmt<-predict(lmt,ames_test,interval='predict')
+pplmt<-predict(lmt,ames_train,interval='predict')
+plmt<-data.frame(plmt)
+pplmt<-data.frame(pplmt)
+plmtA<-predict(lmtA,at1,interval='predict')
+plmtA<-data.frame(plmtA)
+pplmtA<-predict(lmtA,am1,interval='predict')
+pplmtA<-data.frame(pplmtA)
+
+
+
+pr01<- ggplot(ames_train, aes(ames_train$price/1000, log(ames_train$price)))+
+ geom_point()+
+ 
+ geom_line(data=pplmt, aes(y=fit),colour='blue')+
+ geom_ribbon(data=pplmt,aes(ymin=lwr,ymax=upr),alpha=0.1,colour='black',fill="red")+
+ylab("Natural Log Price")+
+    scale_x_discrete(name ="Price (in $1000)"  ,
+                limits=c(0,100,200,300,400,500,600)) +
+    ggtitle('Fig. IV  Training Data:  Predicted Natural Log of Price using Base Model ')
+    
+
+
+pr1<- ggplot(ames_test, aes(ames_test$price/1000, log(ames_test$price)))+
+ geom_point()+
+ 
+ geom_line(data=plmt, aes(y=fit),colour='red')+
+ geom_ribbon(data=plmt,aes(ymin=lwr,ymax=upr),alpha=0.1,colour='black',fill="blue")+
+ylab("Natural Log Price")+
+    scale_x_discrete(name ="Price (in $1000)"  ,
+                limits=c(0,100,200,300,400,500,600)) +
+    ggtitle('Fig. V  Test Data:  Predicted Natural Log of Price using Base Model ')
+    
+pr03<- ggplot(am1, aes(am1$price/1000, log(am1$price)))+
+ geom_point()+
+ 
+ geom_line(data=pplmtA, aes(y=fit),colour='blue')+
+ geom_ribbon(data=pplmtA,aes(ymin=lwr,ymax=upr),alpha=0.1,colour='black',fill="red")+
+ylab("Natural Log Price")+
+    scale_x_discrete(name ="Price (in $1000)"  ,
+                limits=c(0,100,200,300,400,500,600)) +
+    ggtitle('Fig. VI  Training Data: Predicted Natural Log of Price using Base w/BAS Adjustment Model ')
+
+pr3<- ggplot(at1, aes(at1$price/1000, log(at1$price)))+
+ geom_point()+
+ 
+ geom_line(data=plmtA, aes(y=fit),colour='red')+
+ geom_ribbon(data=plmtA,aes(ymin=lwr,ymax=upr),alpha=0.1,colour='black',fill="blue")+
+ylab("Natural Log Price")+
+    scale_x_discrete(name ="Price (in $1000)"  ,
+                limits=c(0,100,200,300,400,500,600)) +
+    ggtitle('Fig. VII Test Data:  Predicted Natural Log of Price using Base w/BAS Adjustment Mode ')
+
+```
+
+
+#### Prediction Intvervals
+
+In statistical inference, specifically predictive inference, a prediction interval is an estimate of an interval in which future observations will fall, with a certain probability, given what has already been observed. Prediction intervals are often used in regression analysis.
+Prediction intervals are used in both frequentist statistics and Bayesian statistics: a prediction interval bears the same relationship to a future observation that a frequentist confidence interval or Bayesian credible interval bears to an unobservable population parameter: prediction intervals predict the distribution of individual future points, whereas confidence intervals and credible intervals of parameters predict the distribution of estimates of the true population mean or other quantity of interest that cannot be observed.[8]
+
+```{r itA}
+
+plot(pr01)
+plot(pr1) 
+
+```
+
+
+#### Base Model 95 percent prediction interval for Training and Test data (above)
+
+In Fig. IV  Training Data:  Predicted Natural Log of Price using Base Model, a 95% confidence interval is provided for the Training Data.  The characteristics of the graph are as follows:
+
+* The black plotted points represents the Natural Log of the price as a function of price, for the Training Data. in other words $P = log(price)$
+* The blue jagged line represents the predicted price from the model, using the Training Data.
+* The pink region bounded by black borders is 95% prediction interval, for the Traing Data.
+
+In Fig. V  Test Data:  Predicted Natural Log of Price using Base Model, a 95% confidence interval is provided for the Test Data.  The characteristics of the graph are as follows:
+
+* The black plotted points represents the Natural Log of the price as a function of price. in other words $P= log(price)$
+* The red jagged line represents the predicted price from the model, using the Test Data.
+* The light blue region bounded by black borders is 95% prediction interval, for the Test Data.
+
+```{r itB}
+
+plot(pr03)
+plot(pr3)
+
+
+```
+
+
+#### Base Model w/BAS 95 percent prediction interval for Training and Test data (above)
+
+Fig. VI Training Data: Predicted Natural Log of Price using Base w/BAS Adjustment Model and Fig. VII Test Data:  Predicted Natural Log of Price using Base w/BAS Adjustment Mode, are similar to Figs. VI-V, with the exception that both the Training Data and the Test Data have been adjusted for BAS modeling.
+
+Through the remainder of this report the Training Data, Test Data and the Validation Data will be presented with 95% prediction intervals that have the same characteristics as Figs. IV-VII above.
+
+
+#### Summary of Overfitting Analysis
+
+Although the RMSE is, in general, smaller for the Test Data than it is for the Training Data, other observations indicate there is overfitting inherent in the models.
+
+An examination of the prediction intervals indicate that the models are overfitted.  The width of the Training Data
+interval ribbon (pink) is smaller than that of the Test Data interval ribbon (blue).
+
+* * *
+ 
+**Note to the learner:** If in real-life practice this out-of-sample analysis shows evidence that the training data fits your model a lot better than the test data, it is probably a good idea to go back and revise the model (usually by simplifying the model) to reduce this overfitting. For simplicity, we do not ask you to do this on the assignment, however.
+
+## Part 3 Development of a Final Model
+
+Now that you have developed an initial model to use as a baseline, create a final model with *at most* 20 variables to predict housing prices in Ames, IA, selecting from the full array of variables in the dataset and using any of the tools that we introduced in this specialization.  
+
+Carefully document the process that you used to come up with your final model, so that you can answer the questions below.
+
+### Section 3.1 Final Model
+
+Provide the summary table for your model.
+
+* * *
+
+
+
+```{r FMA, echo=FALSE}
+
+sumStat <- matrix(c(0.6953192,0.7779075,0.8376505,0.8606549,0.8743366,0.8863358,0.8966699,0.9020662,0.9056622,0.9084827,0.9119799,
+0.9144920,0.9163570,0.9181562,0.9204967,0.9222495,0.9233643,0.9245588,0.9261305,
+
+0.6925494,0.7698440,0.8315814,0.8542348,0.8684091,0.8808493,0.8915631,0.8965227,0.8998779,
+0.9027629,0.9060592,0.9083293,0.9102276,0.9120526,0.9140822,0.9155927,0.9167079,0.9177242,0.9193457),
+ nrow = 19, ncol = 2, byrow = FALSE,
+               dimnames = list(c("Overall.Qual","Neighborhood","logarea","Overall.Cond",   
+"Year.Built","logLot.Area","Bsmt.Full.Bath","Garage.Type",   
+"Sale.Condition","logX2nd.Flr.SF","Bldg.Type","Heating.QC",
+"logBsmtFin.SF.1","Garage.Cars","MS.Zoning","Kitchen.Qual",
+"Fireplaces","Heating","Central.Air"),
+                               c("R Squared","Adj R Squared")))
+
+sumStat<-data.frame(sumStat) 
+
+tLSet<-dplyr::select(ames_test,price,Overall.Qual,Lot.Area,
+Year.Built,Sale.Condition,area,MS.Zoning,Year.Remod.Add,Land.Slope,
+Exter.Qual,Lot.Shape,Land.Contour,Lot.Config,Street,
+Bsmt.Qual,Bsmt.Cond,Bsmt.Exposure,BsmtFin.Type.1,Bldg.Type,
+BsmtFin.SF.1,BsmtFin.Type.2,BsmtFin.SF.2,Bsmt.Unf.SF,
+Total.Bsmt.SF,Heating.QC,Central.Air,House.Style,
+Electrical,X1st.Flr.SF,X2nd.Flr.SF,
+Bsmt.Full.Bath,Bsmt.Half.Bath,Full.Bath,Half.Bath,
+Bedroom.AbvGr,Kitchen.AbvGr,TotRms.AbvGrd,
+Functional,Fireplaces,
+Garage.Yr.Blt,Garage.Finish,Garage.Cars,Garage.Area,
+Paved.Drive,Wood.Deck.SF,
+Open.Porch.SF,Enclosed.Porch,X3Ssn.Porch,Screen.Porch,
+Fence,Misc.Val,Mo.Sold,Yr.Sold,Sale.Type,Neighborhood,Overall.Cond,Garage.Type,Kitchen.Qual,Heating)
+
+tLSet<-data.frame(tLSet)
+
+tLSet$logarea<-log(tLSet$area+1)
+tLSet$logLot.Area<-log(tLSet$Lot.Area+1)
+tLSet$logGarage.Area<-log(tLSet$Garage.Area+1)
+tLSet$logX2nd.Flr.SF<-log(tLSet$X2nd.Flr.SF+1)
+tLSet$logBsmtFin.SF.1<-log(tLSet$BsmtFin.SF.1+1)
+tLSet$logBsmtFin.SF.2<-log(tLSet$BsmtFin.SF.2+1)
+tLSet$logBsmt.Unf.SF<-log(tLSet$Bsmt.Unf.SF+1)
+tLSet$logTotal.Bsmt.SF<-log(tLSet$Total.Bsmt.SF+1)
+tLSet$logWood.Deck.SF<-log(tLSet$Wood.Deck.SF+1)
+tLSet$logOpen.Porch.SF<-log(tLSet$Open.Porch.SF+1)
+tLSet$logX1st.Flr.SF<-log(tLSet$X1st.Flr.SF+1)
+
+
+#summary(lmt2)
+ 
+atLSet2<-dplyr::select(tLSet,price,Overall.Qual,Neighborhood,logarea,       
+Overall.Cond,Year.Built,logLot.Area,Bsmt.Full.Bath,
+Garage.Type,Sale.Condition,logX2nd.Flr.SF,Bldg.Type,     
+Heating.QC,logBsmtFin.SF.1,Garage.Cars,MS.Zoning,   
+Kitchen.Qual,Heating,Central.Air,   
+Fireplaces)
+
+
+
+ate<-atLSet2
+#nrow(ate)
+ate<-atLSet2
+ate<-filter(ate,Overall.Qual!='1')
+ate<-filter(ate,Overall.Qual!='2')
+ate<-filter(ate,Overall.Qual!='3')
+ate<-filter(ate,Overall.Qual!='10')
+ate<-filter(ate,Heating!='OthW')
+#nrow(ate)
+ate<-filter(ate,MS.Zoning!='C (all)')
+ate<-filter(ate,Sale.Condition!='Partial') 
+ate<-filter(ate,Heating.QC!='Po')
+
+
+#nrow(ate)
+ate<-filter(ate,MS.Zoning!='RH')
+#nrow(ate)
+
+ate<-data.frame(ate)
+
+
+#nrow(ames)
+#nrow(ate)
+ate<-filter(ate,Overall.Qual!='1')
+#nrow(ate)
+ate<-filter(ate,Overall.Cond!='3')
+ate<-filter(ate,Overall.Cond!='2')
+ate<-filter(ate,Overall.Cond!='10')
+ate<-filter(ate,Heating!='OthW')
+ate<-filter(ate,Heating!='Wall')
+#nrow(ate)
+ate<-filter(ate,Sale.Condition!='Alloca')
+ate<-filter(ate,Sale.Condition!='Family')
+ate<-filter(ate,Bldg.Type!='2fmCon')
+#nrow(ate)
+ate<-data.frame(ate)
+
+
+amLSet<-ames_train
+amLSet<-data.frame(amLSet)
+amLSet$logarea<-log(amLSet$area+1)
+amLSet$logLot.Area<-log(amLSet$Lot.Area+1)
+amLSet$logX2nd.Flr.SF<-log(amLSet$X2nd.Flr.SF+1)
+amLSet$logBsmtFin.SF.1<-log(amLSet$BsmtFin.SF.1+1)
+
+amSet2<-dplyr::select(amLSet,price,Overall.Qual,Neighborhood,logarea,       
+Overall.Cond,Year.Built,logLot.Area,Bsmt.Full.Bath,
+Garage.Type,Sale.Condition,logX2nd.Flr.SF,Bldg.Type,     
+Heating.QC,logBsmtFin.SF.1,Garage.Cars,MS.Zoning,   
+Kitchen.Qual,Heating,Central.Air,   
+Fireplaces)
+
+ames<-amSet2
+ames<-filter(ames,Overall.Qual!='1')
+#nrow(ames)
+ames<-filter(ames,Overall.Cond!='3')
+#nrow(ames)
+ames<-filter(ames,Sale.Condition!='AdjLand')
+#nrow(ames)
+ames<-filter(ames,Sale.Condition!='Alloca')
+ames<-filter(ames,Sale.Condition!='Family')
+ames<-filter(ames,Bldg.Type!='2fmCon')
+#nrow(ames)
+ames<-filter(ames,MS.Zoning!='I (all)')
+#nrow(ames)
+
+ames<-data.frame(ames)
+aves<-ames
+
+```
+
+
+```{r model_playground,cache=TRUE}
+
+lmt2<-lm(log(price)~.,data=amSet2)
+summary(lmt2)
+
+```
+
+
+
+* * *
+
+### Section 3.2 Transformation
+
+Did you decide to transform any variables?  Why or why not? Explain in a few sentences.
+ 
+* * *
+
+#### Training Data Transformations
+
+The only data transfromations that were rendered was a conversion of area, in square units, to natural log of area. 
+The independent predictor variables that were transformed are provided in the code below.
+
+The transformation came as a consequence of observing the area,in units squared, being right skewed on a histogram plots.
+
+The response variable, price, was also rendered using the natural log function. 
+
+```{r model_assess,cache=TRUE}
+
+amLSet<-ames_train
+amLSet<-data.frame(amLSet)
+amLSet$logarea<-log(amLSet$area+1)
+amLSet$logLot.Area<-log(amLSet$Lot.Area+1)
+amLSet$logX2nd.Flr.SF<-log(amLSet$X2nd.Flr.SF+1)
+amLSet$logBsmtFin.SF.1<-log(amLSet$BsmtFin.SF.1+1)
+
+amSet2<-dplyr::select(amLSet,price,Overall.Qual,Neighborhood,logarea,       
+Overall.Cond,Year.Built,logLot.Area,Bsmt.Full.Bath,
+Garage.Type,Sale.Condition,logX2nd.Flr.SF,Bldg.Type,     
+Heating.QC,logBsmtFin.SF.1,Garage.Cars,MS.Zoning,   
+Kitchen.Qual,Heating,Central.Air,   
+Fireplaces)
+
+
+
+```
+
+* * *
+
+### Section 3.3 Variable Interaction
+
+Did you decide to include any variable interactions? Why or why not? Explain in a few sentences.
+
+* * *
+#### Colinearity of Data
+
+The variables that contribute the most to the final Adjusted $R^2$are chosen from their F-Statistic value determined by an anova model analysis.  The colinearity between these variables is investigated and it was determined that no such relationship exists.
+
+
+```{r model_inter, cache=TRUE,echo=FALSE}
+ames<-amSet2
+#nrow(ames)
+ames<-filter(ames,Overall.Qual!='1')
+ames<-filter(ames,Overall.Qual!='3')
+#nrow(ames)
+ames<-filter(ames,Sale.Condition!='AdjLand')
+ames<-filter(ames,Heating!='OthW')
+ames<-filter(ames,Sale.Condition!='Partial')
+ames<-filter(ames,MS.Zoning!='C (all)')
+#nrow(ames)
+ames<-filter(ames,MS.Zoning!='RH')
+ames<-filter(ames,Overall.Qual!='2')
+ames<-filter(ames,Overall.Qual!='10')
+#nrow(ames)
+ames<-data.frame(ames)
+aves<-ames
+
+lmf2<-lm(log(price)~.,data=ames)
+#summary(lmf2)
+
+
+#anova(lmf2)
+
+```
+
+```{r miA}
+
+pairs(~Overall.Qual+logarea+Year.Built+logLot.Area+Bsmt.Full.Bath+Neighborhood+logX2nd.Flr.SF,
+      data=ames, 
+   main="Colinearity Check")
+
+```
+
+
+#### Nearly Normal Residuals with zero mean 
+
+```{r miB}
+
+
+par(mfrow=c(1,2))
+hist(lmf2$residuals)
+qqnorm(lmf2$residuals)
+qqline(lmf2$residuals)
+
+par(mfrow=c(1,1))
+
+```
+
+* * *
+
+### Section 3.4 Variable Selection
+
+#### Forward Selection - Adjusted R Squared with BAS Adjustments
+
+The forward-selection technique begins with no variables in the model. For each of the independent variables, the Forward method calculates  statistics that reflect the variable's contribution to the model if it is included.  The variable with the highest Adjusted $R^2$ value is chosen and added to the set.  The FORWARD method then calculates  statistics again for the variables still remaining outside the model, and the evaluation process is repeated. Thus, variables are added one by one to the model until no remaining variable produces a significant  statistic. Once a variable is in the model, it stays. 
+
+```{r vsA}
+print('Table I  Model Selection Results Derived from Adjusted R Squared');sumStat
+
+```
+
+
+#### Model Selection Results (Above)
+
+The model selection process proceeded with adding each varable to the model, in the order listed. At the end of each
+additive iteration both $R^2$ and the Adjusted $R^2$ where recorded.  Upon completion, the values for the last entry reflect the overall model statistics for both $R^2$ and the Adjusted $R^2$ .
+
+Once this process was completed a $\bf {BAS}$ model was produced and the results of the Top model were applied to the model
+
+* * *
+
+```{r srA, cache=TRUE,echo=FALSE}
+
+#mod.bas2 <- bas.lm(log(price)~.,data=amSet2, prior = "ZS-null", modelprior=uniform(),initprobs="marg-eplogp")
+
+
+
+
+
+#plot(mod.bas2, ask=F)
+
+#mod.bas2
+#options(width = 80)
+#summary(mod.bas2)
+#image(mod.bas2, rotate=T)
+
+
+
+```
+
+
+```{r model_selectA}
+
+```
+
+* * *
+
+### Section 3.5 Model Testing
+
+How did testing the model on out-of-sample data affect whether or how you changed your model? Explain in a few sentences.
+
+* * *
+
+
+```{r model_testing, echo=FALSE}
+
+# Extract Predictions
+
+predict.full <- exp(predict(lmf2, ate))
+
+# Extract Residuals
+resid.full <- ate$price - predict.full
+resid.full<-resid.full[-c(grep('TRUE',is.na(resid.full)))]
+# Calculate RMSE
+rmse.full <- sqrt(mean(resid.full^2))
+
+
+
+
+
+plmt<-predict(lmf2,ate,interval='predict')
+plmt<-data.frame(plmt)
+
+
+tr3<- ggplot(ate, aes(ate$price/1000, log(ate$price)))+
+ geom_point()+
+ 
+ geom_line(data=plmt, aes(y=fit),colour='red')+
+ geom_ribbon(data=plmt,aes(ymin=lwr,ymax=upr),alpha=0.1,colour='black',fill="blue")+
+ylab("Natural Log Price")+
+    scale_x_discrete(name ="Price (in $1000)"  ,
+                limits=c(0,100,200,300,400,500,600)) +
+    ggtitle('Fig. VII Test Data:  Predicted Natural Log of Price ')
+
+```
+
+
+#### Test Data RMSE
+
+```{r mdtA}
+
+
+sprintf("%8.0f US Dollars",rmse.full)
+```
+
+
+#### Test Data Residuals
+
+```{r mdtB}
+
+plot(resid.full, main="Residuals for Test Data")
+
+```
+
+
+#### Test Data 95 Per Cent Prediction Intervals
+
+```{r mdtC}
+
+plot(tr3)
+```
+
+
+#### Test Data Per Centage of Houses witin the Prediction Interval
+
+
+```{r mdtD}
+
+
+sprintf("%7.0f Per Cent",round(100-(100*length(grep('TRUE',is.na(plmt$fit)))/length(plmt$fit)),2))
+
+```
+
+#### Out of Sample Data Testing Summary
+
+The  ames_test, out of sample, data was analysized using the training model.  The results are summarized by the following:
+
+1. RMSE is 18000 US Dollars which is about 500 dollars larger than the training data
+
+2. The residuals contain about 20 houses having prices such that:  abs(residual) > 50,000 US dollars, indicating outliers.
+
+3. The 95% prediction interval ribbons are wider than those for the training data.
+
+4. 97% of the house prices are within the 95% prediction interval
+
+* * *
+
+## Part 4 Final Model Assessment
+
+### Section 4.1 Final Model Residual
+
+```{r resA, echo=FALSE}
+ames<-amSet2
+#nrow(ames)
+ames<-filter(ames,Overall.Qual!='1')
+ames<-filter(ames,Overall.Qual!='3')
+#nrow(ames)
+ames<-filter(ames,Sale.Condition!='AdjLand')
+ames<-filter(ames,Heating!='OthW')
+ames<-filter(ames,Sale.Condition!='Partial')
+ames<-filter(ames,MS.Zoning!='C (all)')
+#nrow(ames)
+ames<-filter(ames,MS.Zoning!='RH')
+ames<-filter(ames,Overall.Qual!='2')
+ames<-filter(ames,Overall.Qual!='10')
+#nrow(ames)
+ames<-data.frame(ames)
+```
+
+
+```{r resAA}
+
+
+lmf2<-lm(log(price)~.,data=ames)
+#summary(lmf2)
+
+#summary(lmf2)$adj.r.square
+plmf2<-predict(lmf2,ate,interval='predict')
+plmf2<-data.frame(plmf2)
+pplmf2<-predict(lmf2,ames,interval='predict')
+pplmf2<-data.frame(pplmf2)
+
+# Extract Predictions
+predict.lmf2 <- exp(predict(lmf2, ames))
+# Extract Residuals
+resid.lmf2 <- ames$price - predict.lmf2
+# Calculate RMSE
+r2<-resid.lmf2
+plot(r2, main='Final Model Residuals') 
+
+```
+
+For your final model, create and briefly interpret an informative plot of the residuals.
+
+* * *
+
+#### Final Model Residual Analysis
+
+The final model residuals appear to be normally ditributed and contain about 10 outlier priced houses having prices such that: abs(residual) > 50,000 US dollars.
+This means that the residual outlier values either fell below -$50,000 or above +$50,000.
+
+* * *
+
+
+### Section 4.2 Final Model RMSE
+
+```{r RMSEA}
+
+resid.lmf2<-data.frame(resid.lmf2)
+resid.lmf2<-as.data.frame(lapply(resid.lmf2, na.omit))
+rmse.lmf2<- sqrt(mean(resid.lmf2^2))
+
+sprintf("%8.0f US Dollars",rmse.lmf2)
+
+```
+
+For your final model, calculate and briefly comment on the RMSE.
+
+
+#### Final Model RMSE Analysis
+The final model RMSE value is 17530 US Dollars which is a slightly larger than half of the original model value of  31350 US Dollars.  This result is very pleasing.
+
+* * *
+
+
+
+* * *
+
+### Section 4.3 Final Model Evaluation
+
+
+#### Final Model 95 Per Cent Prediction Intervals
+
+```{r fmeA}
+
+
+pr00<- ggplot(ames, aes(ames$price/1000, log(ames$price)))+
+ geom_point()+
+ 
+ geom_line(data=pplmf2, aes(y=fit),colour='blue')+
+ geom_ribbon(data=pplmf2,aes(ymin=lwr,ymax=upr),alpha=0.1,colour='black',fill="red")+
+ylab("Natural Log Price")+
+    scale_x_discrete(name ="Price (in $1000)"  ,
+                limits=c(0,100,200,300,400,500,600)) +
+    ggtitle('Fig. X Plot Training Data - Final Model - Predicted Natural Log of Price ')
+
+plot(pr00);
+
+sprintf("%7.0f Per Cent of the house prices are witin prediction interval",
+        round(100-(100*length(grep('TRUE',is.na(plmf2$fit)))/length(plmf2$fit)),2))
+
+```
+
+What are some strengths and weaknesses of your model?
+
+#### Final Model Strengths and Weaknesses Analysis
+
+* $\bf Strengths$ - 95 % Prediction intervals are narrow - Very Few Outliers - Much smaller RMSE.  This gives rise to a very strong model to validate other data.
+
+* $\bf Weaknesses$ - Some of the data points were lost due to BAS filtering. Other weaknesses may come about from outliers witin the data and overall small size of the data samples.
+
+
+* * *
+
+
+* * *
+
+### Section 4.4 Final Model Validation
+
+Testing your final model on a separate, validation data set is a great way to determine how your model will perform in real-life practice. 
+
+You will use the ames_validation dataset to do some additional assessment of your final model. Discuss your findings, be sure to mention:
+
+* What is the RMSE of your final model when applied to the validation data? 
+
+* How does this value compare to that of the training data and/or testing data?
+
+* What percentage of the 95% predictive confidence (or credible) intervals contain the true price of the house in the validation data set?  
+
+* From this result, does your final model properly reflect uncertainty?
+
+```{r loadvalidation, message = FALSE}
+load("ames_validation.Rdata")
+#nrow(ames_validation)
+aves<-ames
+ames_validation$Overall.Qual<-as.factor(ames_validation$Overall.Qual)
+ames_validation$Overall.Cond<-as.factor(ames_validation$Overall.Cond)
+av<-ames_validation
+```
+
+```{r lvdA, echo=FALSE}
+
+
+vLSet<-dplyr::select(ames_validation,price,Overall.Qual,Lot.Area,
+Year.Built,Sale.Condition,area,MS.Zoning,Year.Remod.Add,Land.Slope,
+Exter.Qual,Lot.Shape,Land.Contour,Lot.Config,Street,
+Bsmt.Qual,Bsmt.Cond,Bsmt.Exposure,BsmtFin.Type.1,Bldg.Type,
+BsmtFin.SF.1,BsmtFin.Type.2,BsmtFin.SF.2,Bsmt.Unf.SF,
+Total.Bsmt.SF,Heating.QC,Central.Air,House.Style,
+Electrical,X1st.Flr.SF,X2nd.Flr.SF,
+Bsmt.Full.Bath,Bsmt.Half.Bath,Full.Bath,Half.Bath,
+Bedroom.AbvGr,Kitchen.AbvGr,TotRms.AbvGrd,
+Functional,Fireplaces,
+Garage.Yr.Blt,Garage.Finish,Garage.Cars,Garage.Area,
+Paved.Drive,Wood.Deck.SF,
+Open.Porch.SF,Enclosed.Porch,X3Ssn.Porch,Screen.Porch,
+Fence,Misc.Val,Mo.Sold,Yr.Sold,Sale.Type,Neighborhood,Overall.Cond,Garage.Type,Kitchen.Qual,Heating)
+
+vLSet<-data.frame(vLSet)
+
+vLSet$logarea<-log(vLSet$area+1)
+vLSet$logLot.Area<-log(vLSet$Lot.Area+1)
+vLSet$logGarage.Area<-log(vLSet$Garage.Area+1)
+vLSet$logX2nd.Flr.SF<-log(vLSet$X2nd.Flr.SF+1)
+vLSet$logBsmtFin.SF.1<-log(vLSet$BsmtFin.SF.1+1)
+vLSet$logBsmtFin.SF.2<-log(vLSet$BsmtFin.SF.2+1)
+vLSet$logBsmt.Unf.SF<-log(vLSet$Bsmt.Unf.SF+1)
+vLSet$logTotal.Bsmt.SF<-log(vLSet$Total.Bsmt.SF+1)
+vLSet$logWood.Deck.SF<-log(vLSet$Wood.Deck.SF+1)
+vLSet$logOpen.Porch.SF<-log(vLSet$Open.Porch.SF+1)
+vLSet$logX1st.Flr.SF<-log(vLSet$X1st.Flr.SF+1)
+
+
+
+avLSet2<-dplyr::select(vLSet,price,Overall.Qual,Neighborhood,logarea,       
+Overall.Cond,Year.Built,logLot.Area,Bsmt.Full.Bath,
+Garage.Type,Sale.Condition,logX2nd.Flr.SF,Bldg.Type,     
+Heating.QC,logBsmtFin.SF.1,Garage.Cars,MS.Zoning,   
+Kitchen.Qual,Heating,Central.Air,   
+Fireplaces)
+
+
+
+ave<-avLSet2
+#nrow(ave)
+ave<-avLSet2
+ave<-filter(ave,Overall.Qual!='1')
+#ave<-filter(ave,Overall.Qual!='2')
+ave<-filter(ave,Overall.Qual!='3')
+#ave<-filter(ave,Overall.Qual!='10')
+ave<-filter(ave,Heating!='OthW')
+#nrow(ave)
+ave<-filter(ave,MS.Zoning!='C (all)')
+ave<-filter(ave,Sale.Condition!='Partial') 
+ave<-filter(ave,Heating.QC!='Po')
+
+
+#nrow(ave)
+ave<-filter(ave,MS.Zoning!='RH')
+#nrow(ave)
+
+ave<-data.frame(ave)
+
+
+
+#nrow(aves)
+aves<-filter(aves,Overall.Qual!='1')
+aves<-filter(aves,Overall.Qual!='3')
+
+#nrow(aves)
+aves<-filter(aves,Sale.Condition!='AdjLand')
+aves<-filter(aves,Heating!='OthW')
+aves<-filter(aves,Sale.Condition!='Partial')
+aves<-filter(aves,MS.Zoning!='C (all)')
+#nrow(aves)
+aves<-filter(aves,MS.Zoning!='RH')
+aves<-filter(aves,Overall.Qual!='2')
+aves<-filter(aves,Overall.Qual!='10')
+#nrow(aves)
+aves<-data.frame(aves)
+
+
+##############BAS ADJUSTMENTS ##################
+
+
+#nrow(aves)
+#nrow(ave)
+ave<-filter(ave,Overall.Qual!='1')
+ave<-filter(ave,Overall.Qual!='2')
+ave<-filter(ave,Overall.Qual!='10')
+
+#nrow(ave)
+ave<-filter(ave,Overall.Cond!='2')
+ave<-filter(ave,Overall.Cond!='3')
+
+#nrow(ave)
+ave<-filter(ave,Sale.Condition!='Alloca')
+ave<-filter(ave,Sale.Condition!='Family')
+ave<-filter(ave,Bldg.Type!='2fmCon')
+#nrow(ave)
+ave<-data.frame(ave)
+aves<-filter(aves,Overall.Qual!='1')
+#nrow(aves)
+aves<-filter(aves,Overall.Cond!='3')
+#nrow(aves)
+aves<-filter(aves,Sale.Condition!='AdjLand')
+#nrow(aves)
+aves<-filter(aves,Sale.Condition!='Alloca')
+aves<-filter(aves,Sale.Condition!='Family')
+aves<-filter(aves,Bldg.Type!='2fmCon')
+#nrow(aves)
+aves<-filter(aves,MS.Zoning!='I (all)')
+#nrow(aves)
+#nrow(ave)
+aves<-data.frame(aves)
+```
+
+```{r lvdB}
+
+
+plmfF<-predict(lmf2,ave,interval='predict')
+plmfF<-data.frame(plmfF)
+pplmfF<-predict(lmf2,aves,interval='predict')
+pplmfF<-data.frame(pplmfF)
+
+# Extract Predictions
+predict.lmf2 <- exp(predict(lmf2, ave))
+# Extract Residuals
+resid.lmf2 <- ave$price - predict.lmf2
+# Calculave RMSE
+p2<-predict.lmf2
+r2<-resid.lmf2
+
+#round(100-(100*length(grep('TRUE',is.na(pplmf2$fit)))/length(ames_validation)),2)
+resid.lmf2<-data.frame(resid.lmf2)
+resid.lmf2<-as.data.frame(lapply(resid.lmf2, na.omit))
+rmse.lmf3<- sqrt(mean(resid.lmf2^2))
+
+pr001<- ggplot(ave, aes(ave$price/1000, log(ave$price)))+
+ geom_point()+
+ geom_line(data=plmfF, aes(y=fit),colour='red')+
+ geom_ribbon(data=plmfF,aes(ymin=lwr,ymax=upr),alpha=0.1,colour='black',fill="blue")+
+ylab("Natural Log Price")+
+    scale_x_discrete(name ="Price (in $1000)"  ,
+                limits=c(0,100,200,300,400,500,600)) +
+    ggtitle('Fig. XI Plot Validation Data for Predicted Natural Log of Price ')
+
+pcwi<-round(100-(100*length(grep('TRUE',is.na(pplmf2$fit)))/length(pplmf2$fit)),2)
+
+```
+
+
+#### Validation Data Residuals
+
+The final model validation residuals contain about 12 outlier priced houses having prices such that: abs(residual) > 50,000 US dollars.
+This means that the residual outlier values either fell below -$50,000 or above +$50,000.
+
+
+```{r}
+
+plot(r2, main='Validation Residuals ')
+```
+
+#### Validation Data RMSE
+
+A comparison of the Validation, Test and Training RMSE values is provided below:
+
+* Validation Data RMSE is `r  as.integer(rmse.lmf3)` US Dollars
+* Test Data RMSE is  US Dollars `r as.integer(rmse.full)` US Dollars
+* Training Data RMSE is `r as.integer(rmse.lmf2)` US Dollars
+
+The Validation Data RMSE is greater than Training Data RMSE, but, however, is less than the Test Data RMSE.
+
+
+#### Validation Data Evaluation
+
+$\bf Validation$ $\bf Data$ $\bf 95$ $\bf Per$ $\bf Cent$ $\bf Prediction$ $\bf Interval$
+
+```{r lvaD}
+
+
+plot(pr001)
+
+
+```
+
+$\bf `r pcwi`$ $\bf Per$ $\bf Cent$ $\bf of$ $\bf the$ $\bf 95$ $\bf Per$ $\bf Cent$ $\bf predictive$ $\bf confidence$ $\bf (or$ $\bf credible)$ $\bf intervals$ $\bf contain$ $\bf the$ $\bf true$ $\bf price$ $\bf of$ $\bf the$ $\bf house$ $\bf in$ $\bf the$ $\bf validation$ $\bf data$ $\bf set.$
+
+The model uncertainty appears to be minimized upon examination of the test data results in $\bf section$ $\bf {2.3.5.5}$ Out of Sample Data Testing Summary, listed above.
+
+* * *
+
+
+
+```{r model_validate}
+ovun<-ave
+ovun$Resid<-r2
+ovun$Predict<-p2
+ovun<-data.frame(ovun)
+ovun<-filter(ovun,Resid!='NA')
+ovun<-filter(ovun,Predict!='NA')
+ov<-filter(ovun,Resid>mean(ovun$Resid))
+un<-filter(ovun,Resid<mean(ovun$Resid))
+upredM<-mean(un$Predict)
+upricM<-mean(un$price)
+opredM<-mean(ov$Predict)
+opricM<-mean(ov$price)
+usd<-sd(un$Resid)
+usd<- abs(usd)
+umn<-mean(un$Resid)
+un$Lim<-un$price+2*usd
+osd<-sd(ov$Resid)
+omn<-mean(ov$Resid)
+ov$Lim<-ov$price-2*osd
+
+p1<-ggplot(aes(x = log(Predict) ) , data = un) + 
+geom_histogram(aes(fill=(log(Predict)>=log(price + 2*usd)) )) +
+stat_bin( geom="text", aes(label=..count..) ,vjust = 0,hjust=0) +	
+xlab('Natural log of Price (in US Dollars)')+
+#geom_vline(data=un,xintercept=median(log(un$price)), color="red")+
+geom_vline(data=un,xintercept=mean(log(un$price)), color="blue")+
+#geom_vline(data=un,xintercept=median(log(un$Predict)), color="green")+
+geom_vline(data=un,xintercept=mean(log(un$Predict)), color="yellow")+
+
+ ggtitle("Fig XII. Log of Price Distribution of Undervalued Real Estate for Ames Iowa")
+```
+
+
+```{r valA, echo=FALSE}
+
+
+
+
+
+p2<-ggplot(aes(x = log(Predict) ) , data = ov) + 
+geom_histogram(aes(fill=(log(Predict)<=log(price - 2*osd)) )) +
+stat_bin( geom="text", aes(label=..count..) ,vjust = 0,hjust=0) +	
+xlab('Natural log of Price (in US Dollars)')+
+#geom_vline(data=ov,xintercept=median(log(ov$price)), color="red")+
+geom_vline(data=ov,xintercept=mean(log(ov$price)), color="blue")+
+#geom_vline(data=ov,xintercept=median(log(ov$Predict)), color="green")+
+geom_vline(data=ov,xintercept=mean(log(ov$Predict)), color="yellow")+
+
+ ggtitle("Fig XIV. Log of Price Distribution of Overvalued Real Estate for Ames Iowa")
+
+```
+```{r valB}
+
+
+
+```
+
+```{r valAA ,echo=FALSE}
+UU<-matrix(0, nrow = 350, ncol = 5,byrow=TRUE,
+dimnames = list(1:350,  c("index","Neighborhood", "price","Predict","Diff")))
+UU<-data.frame(UU)
+Uun<-un[1,]
+k=1
+for(i in 1:nrow(un)){
+     if(un[i,'Predict']>=un[i,'Lim']){
+          #print(i)
+          UU[k,'Neighborhood']<-as.character(un[i,'Neighborhood'])
+          UU[k,'price']<-un[i,'price'] 
+          UU[k,'Predict']<-un[i,'Predict']
+          UU[k,'Diff']<-un[i,'Predict'] - un[i,'price']
+          UU[k,'index']<-i
+          Uun[k,]<-un[i,]
+          k<-k+1
+     }
+}
+UU<-UU[1:k,]
+UU<-UU[order(-UU[,5]),]
+
+OV<-matrix(0, nrow = 350, ncol = 5,byrow=TRUE,
+dimnames = list(1:350,  c("index","Neighborhood", "price","Predict","Diff")))
+OV<-data.frame(OV)
+Oov<-ov[1,]
+k=1
+for(i in 1:nrow(ov)){
+     if(ov[i,'Predict']<=ov[i,'Lim']){
+          #print(i)
+          OV[k,'Neighborhood']<-as.character(ov[i,'Neighborhood'])
+          OV[k,'price']<-ov[i,'price'] 
+          OV[k,'Predict']<-ov[i,'Predict']
+          OV[k,'Diff']<-ov[i,'price'] - ov[i,'Predict']
+          OV[k,'index']<-i
+          Oov[k,]<-ov[i,]
+          k<-k+1
+     }
+}
+OV<-OV[1:k,]
+OV<-OV[order(-OV[,5]),]
+
+am<-0
+for(ax in c('Uun','Oov')){
+if(ax=='Uun')am<-Uun
+if(ax=='Oov')am<-Oov
+neighstat <- matrix(0, nrow = length(unique(am$Neighborhood)), ncol = 6, byrow = TRUE,
+               dimnames = list(unique(am$Neighborhood),
+                               c("Mean", "SD","Median","Max","Min","IQR")))
+neighstat<-data.frame(neighstat)
+#BUILD THE DATA FRAME
+j=1
+for(i in rownames(neighstat)){
+      neighstat[j,1]<-mean(filter(am,Neighborhood==i)$price)
+      neighstat[j,2]<-sd(filter(am,Neighborhood==i)$price)
+      neighstat[j,3]<-median(filter(am,Neighborhood==i)$price)
+      neighstat[j,4]<-max(filter(am,Neighborhood==i)$price)
+      neighstat[j,5]<-min(filter(am,Neighborhood==i)$price)
+	neighstat[j,6]<-IQR(filter(am,Neighborhood==i)$price)
+
+      j=j+1
+}
+# REVERSE ORDER THE DATA FRAMES BY MEDIAN, MEAN AND SD INTO SEPARATE DATA FRAMES
+medianRN<-rownames(neighstat[order(-neighstat$Median),])
+meanRN<-rownames(neighstat[order(-neighstat$Mean),])
+sdRN<-rownames(neighstat[order(-neighstat$SD),])
+iqrRN<-rownames(neighstat[order(-neighstat$IQR),])
+
+RN<-rbind(medianRN,meanRN,sdRN,iqrRN)
+#RN
+medianPlot<-data.frame()
+meanPlot<-data.frame()
+if(ax=='Uun')sdPlot<-data.frame()
+else sd1Plot<-data.frame()
+iqrPlot<-data.frame()
+
+medianPlot<-ggplot(medianPlot)
+meanPlot<-ggplot(meanPlot)
+if(ax=='Uun')sdPlot<-ggplot(sdPlot)
+else sd1Plot<-ggplot(sd1Plot)
+iqrPlot<-ggplot(iqrPlot)
+
+medianTitle<-"Fig, XIII  Ames Real Estate, by Neighborhood, in Order of Highest Median Price"
+meanTitle<-"Fig. XV  Ames Real Estate, by Neighborhood, in Order of Highest Average Price"
+
+if(ax=='Uun') sdTitle<-"Fig. XIII  Ames Most Undervalued Real Estate, by Neighborhood"
+else  sdTitle<-"Fig. XV  Ames Most Overvalued Real Estate, by Neighborhood"
+
+iqrTitle<-"Fig. V  Ames Real Estate, by Neighborhood, in Order Highest Price IQR"
+
+Title<-rbind(medianTitle,meanTitle,sdTitle,iqrTitle)
+#Title
+
+for(k in 1:nrow(RN)){
+
+	j=1
+	for(i in RN[k,]){
+ 		x<-am$Neighborhood==i
+ 		am[grep("TRUE",x),'order']<-j
+		ifelse(j<10,am[grep("TRUE",x),'NeighborhoodLabel']<-paste0("0",j," ",i),am[grep("TRUE",x),'NeighborhoodLabel']<-paste0(j," ",i))
+		j=j+1
+	}
+
+	x<-am %>% group_by( order) %>%
+	ggplot( aes(x=as.factor(order), y=price/1000,fill = NeighborhoodLabel, col=I("black"))) + geom_boxplot() +
+    	stat_summary(fun.y=mean, geom="point", shape=4, size=5,color='black')+		
+	stat_summary(fun.y=min, geom="point", shape=25, size=2)  +
+	  stat_summary(fun.y=sd, geom="point", shape=1, size=2,color='red')  +
+	  stat_summary(fun.y=max, geom="point", shape=24, size=2)  +
+	  
+	  
+   	coord_flip()+
+	xlab("Neigborhood")+
+	scale_y_discrete(name ="Price (in $1000)"  ,
+                limits=c(0,100,200,300,400,500,600)) +
+	ggtitle(Title[k,1])
+
+	if(k==1){medianPlot<-x}
+	if(k==2){meanPlot<-x}
+	if(k==3){
+           if(ax=='Uun'){sdPlot<-x}
+           else {sd1Plot<-x}
+      }
+	if(k==4){iqrPlot<-x}
+
+
+}
+}
+
+```
+
+```{r valBB}
+
+
+
+```
+
+```{r valC, echo=FALSE}
+
+
+ov$T<-as.factor('over')
+un$T<-as.factor('under')
+ovun<-rbind(ov,un)
+am<-ovun
+#nrow(ovun)
+limU<-2*usd;limO<-2*osd
+
+ami<-order(am$price)
+oam<-am[ami,]
+indx<-1:335
+subS<-oam[indx,]
+subS<-data.frame(subS)
+subS2<-oam[-indx,]
+subS2<-data.frame(subS2)
+par(mfrow=c(1,1))
+```
+
+#### Validation Data Undervalued Houses:   Residual Analysis
+
+The histogram depicted in Fig. XII, below, can be summarized by the following
+
+1. The natural log of the houses having predicted prices residuals above the mean ($`r as.integer(umn)`),  (red and blue regions) 
+
+2. The blue regions represent all houses having predicted price residuals two standard deviations $`r as.integer(limU)`  above the mean 
+
+3. The yellow line is the mean value of the predicted price values $`r as.integer(upredM)` - log(`r log(upredM)`)
+
+4. The blue line is the mean value of the actual price values $`r as.integer(upricM)` - log(`r log(upricM)`
+
+
+```{r viaF}
+
+
+suppressMessages(print(p1))
+
+```
+
+The hosue prices falling into the blue-shaded region of the histogram, above, are boxplotted by Neighborhood and depicted in Fig.XIII, below.
+Each boxplot represents Neighborhood as a function of actual selling price. The symbols used in each boxplot are consistent with the description provided for Fig.II in section 2 above.
+
+```{r vlaG}
+
+
+suppressWarnings(print(sdPlot))
+```
+
+The List below represents the top 15 undervalued houses that were identified by the model in the ames validation data.
+
+1. The $\bf Neighborhood$ column is which of the 20 Neighborhoods where the house is located
+2. The $\bf price$ column is the actual sale price in $US
+3. The $\bf Predict$ column is the price, $US, predicted by the model
+4. The $\bf Diff$ column is the difference in the predicted and actual price in $US.  This column is a measuse of the $\bf Undervaluedness$ for the house.
+
+```{r vlaH}
+
+head(UU,15)
+
+
+```
+
+#### Validation Data Overvalued Houses:   Residual Analysis
+
+The histogram depicted in Fig. XIV, below, can be summarized by the following
+
+1. The natural log of the houses having predicted prices residuals below the mean ($`r as.integer(omn)`),  (red and blue regions) 
+
+2. The blue regions represent all houses having predicted price residuals two standard deviations$`r as.integer(limO)` below the mean.
+
+3. The yellow line is the mean value of the predicted price values $`r as.integer(opredM)` - log(`r log(opredM)`)
+
+4. The blue line is the mean value of the actual price values $`r as.integer(opricM)` - log(`r log(opricM)`
+
+
+
+```{r viaG}
+
+suppressMessages(print(p2))
+
+```
+
+The hosue prices falling into the blue-shaded region of the histogram, above, are boxplotted by Neighborhood and depicted in Fig.XV, below.
+Each boxplot represents Neighborhood as a function of actual selling price. The symbols used in each boxplot are consistent with the description provided for Fig.II in section 2 above.
+
+
+```{r viaJ}
+
+suppressWarnings(print(sd1Plot))
+
+```
+
+The List below represents the top 15 overvalued houses that were identified by the model in the ames validation data.
+
+1. The $\bf Neighborhood$ column is which of the 20 Neighborhoods where the house is located
+2. The $\bf price$ column is the actual sale price in $US
+3. The $\bf Predict$ column is the price, $US, predicted by the model
+4. The $\bf Diff$ column is the difference in the predicted and actual price in $US.  This column is a measuse of the $\bf Overvaluedness$ for the house.
+
+```{r viaK}
+
+head(OV,12)
+
+```
+
+```{r valCC, echo=FALSE}
+
+
+n.T = length(levels(subS2$T))
+par(mar=c(5,4,4,10))
+
+
+
+
+```
+
+* * *
+
+## Part 5 Conclusion
+
+Provide a brief summary of your results, and a brief discussion of what you have learned about the data and your model. 
+
+* * *
+
+### Results Summary
+
+
+#### Log of Lowest House prices as a Function of Log of Living Space
+
+The overvalued and undervalued houses, for the validation data, are partitioned into two subsets according to price.
+One subset groups lowest selling price houses together, while the other groups the houses with the highest price.  A scatter plot for each is provided below.
+
+```{r rsA, echo=FALSE}
+
+n.T = length(levels(subS2$T))
+par(mar=c(5,4,4,10))
+
+plot(log(price) ~ I(logarea), 
+     data=subS, col=(1:n.T)+10,
+     pch=14+(1:n.T), main="Fig.XVI  335 Lowest Sale Prices showing Under/Over valued",
+     xlab=" Log of Living Space (in SF)",ylab="Natural Log of Price (in US Dollars)")
+legend(x=,"right", legend=levels(subS$T),
+       col=(1:n.T)+10, pch=14+(1:n.T),
+bty="n", xpd=TRUE, inset=c(-.5,0))
+
+
+
+```
+
+For the 335 lowest priced houses in the scatter plot above `r nrow(filter(subS,T=='under'))` are under valued.  The remaining `r nrow(filter(subS,T=='over'))` are overvalued.
+
+#### Log of Highest House prices as a Function of Log of Living Space
+
+```{r rsB, echo=FALSE}
+
+n.T = length(levels(subS2$T))
+par(mar=c(5,4,4,10))
+
+plot(log(price) ~ I(logarea), 
+     data=subS2, col=(1:n.T)+8 ,
+     pch=14+(1:n.T), main="Fig.XVII  335 Highest Sale Prices showing Under/Over valued",
+     xlab=" Log of Living Space (in SF)",ylab="Natural Log of Price (in US Dollars)")
+legend(x=,"right", legend=levels(subS$T),
+       col=(1:n.T)+8, pch=14+(1:n.T),
+bty="n", xpd=TRUE, inset=c(-.5,0))
+
+
+```
+
+For the 335 highest priced houses in the scatter plot above `r nrow(filter(subS2,T=='under'))` are under valued.  The remaining `r nrow(filter(subS2,T=='over'))` are overvalued.
+
+### Learned Findings
+
+#### Exploratory Data Analysis (EDA) and Modeling
+
+The EDA was used to examine undervalued and overvalued homes with respect to contibuting data factors.  The factors that were examined included Condition of Sale, Neighborhood and overall quality.  Attention was initially spent on the lower priced houses.  It became evident that all ranges of house prices were subject to being both undervalued as well as overvalued.
+
+Examining different types of models for the final model involved using BAS, AIC/BIC and data transformations.  
+The final model was selected from a subset containing all usable data items using the forward selection method with adjusted R squared.  This along with BAS filtering and data transformations produced the highly effective final model.
+
+
+
+#### Analysis and Outcome
+
+Using the final model, the validation model data was analyzed in terms of residuals, RMSE and prediction.
+The final model residuals were close examined to determine the houses in the validation set that were either overvalued or undervalued.  Statistical analysis was performed on hte residual data to produce a list of undervalued and overvalued houses.
+
+* * *
+## Part 6 References
+
+1. https://cran.r-project.org/web/packages/BAS/vignettes/BAS-vignette.html
+
+2. https://en.wikipedia.org/wiki/Akaike_information_criterion
+
+3. http://www.tandfonline.com/doi/abs/10.1198/jcgs.2010.09049
+
+4. https://en.wikipedia.org/wiki/Errors_and_residuals
+
+5. http://stattrek.com/regression/residual-analysis.aspx?Tutorial=AP
+
+6. https://en.wikipedia.org/wiki/Mean_squared_error
+
+7.  Lehmann, E. L.; Casella, George (1998). Theory of Point Estimation (2nd ed.). New York: Springer. ISBN 0-387-98502-6. MR 1639875.
+
+8. https://en.wikipedia.org/wiki/Prediction_interval
+* * *
